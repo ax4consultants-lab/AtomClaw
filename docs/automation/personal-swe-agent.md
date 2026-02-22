@@ -420,3 +420,4 @@ Need from you: confirm whether to update fixture baseline or skip this test in d
 - [Configuration Reference](/gateway/configuration-reference)
 - [Cron jobs](/automation/cron-jobs)
 - [Hooks](/automation/hooks)
+- [Browser workflows for SaaS](/tools/browser-workflows)
