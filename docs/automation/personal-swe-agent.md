@@ -41,6 +41,79 @@ Use it when you want one agent profile that can:
 > Policy rules (system prompt, hooks, scratchpad) and cron job definitions are configured separately
 > as described in the sections below.
 
+## Local-only operation mode
+
+Use this profile when you want OpenClaw to run only against model endpoints you host on your own machine or LAN.
+
+### Copy-paste local-only config
+
+```json5
+// ~/.openclaw/openclaw.json
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "local-ollama/llama3.1:8b",
+        fallbacks: ["local-gateway/qwen2.5-coder-7b-instruct"],
+      },
+      models: {
+        "local-ollama/llama3.1:8b": { alias: "Ollama local" },
+        "local-gateway/qwen2.5-coder-7b-instruct": { alias: "LAN gateway" },
+      },
+    },
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      "local-ollama": {
+        baseUrl: "http://127.0.0.1:11434/v1",
+        api: "openai-completions",
+        apiKey: "not-required",
+        models: [{ id: "llama3.1:8b", name: "Llama 3.1 8B" }],
+      },
+      "local-gateway": {
+        baseUrl: "http://192.168.1.50:4000/v1",
+        api: "openai-completions",
+        apiKey: "local-network-key",
+        models: [{ id: "qwen2.5-coder-7b-instruct", name: "Qwen 2.5 Coder 7B" }],
+      },
+    },
+  },
+}
+```
+
+### Local-only hardening checklist
+
+- [ ] Set `agents.defaults.model.primary` and any fallbacks only to local providers (for example `127.0.0.1`, `localhost`, or private RFC1918 LAN IPs).
+- [ ] Remove cloud provider API keys from config and shell environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, and similar).
+- [ ] Keep `models.providers.*.baseUrl` pointed at local endpoints only.
+- [ ] Do not configure third-party webhook URLs in channels (for example public Telegram/Slack webhook endpoints) unless you explicitly need them.
+- [ ] Keep hook URLs and automation integrations on loopback or LAN only when possible.
+
+### Verify no outbound model traffic to third-party APIs
+
+1. Start OpenClaw with the local-only config and run a simple prompt.
+2. In another shell, inspect active network connections and confirm model traffic only targets local addresses.
+
+```bash
+openclaw config get agents.defaults.model.primary
+openclaw config get models.providers
+openclaw message send --agent main "Reply with: local check"
+ss -tnp | rg ':(443|80|11434|4000)'
+```
+
+3. Optional deeper check: capture a short packet trace while sending one prompt and verify there are no connections to known model API domains.
+
+```bash
+sudo tcpdump -i any -n '(tcp port 443 or tcp port 80 or tcp port 11434 or tcp port 4000)'
+```
+
+Expected result: model requests resolve only to your loopback/LAN endpoints, with no sessions to third-party model hosts.
+
+<Warning>
+Local-only model routing does not make the entire workflow offline by itself. Features such as npm installs, cloning or syncing remote Git repositories, hosted CDP/browser endpoints, or any intentionally configured remote webhooks still require internet access when enabled.
+</Warning>
+
 ## Implementation steps (commands and config locations)
 
 Use this section to apply the preset with concrete CLI commands and file paths.
@@ -140,8 +213,11 @@ openclaw channels status --probe
 ```
 
 codex/add-reusable-prompt-template-file-and-documentation
+
 ## Agent system prompt template
+
 =======
+
 ## Operations runbook (always-on validation)
 
 Use this runbook to validate that your personal SWE agent stays healthy end-to-end across
@@ -218,6 +294,7 @@ openclaw channels status --probe
 ```
 
 ## Agent system prompt (conceptual policy)
+
 main
 
 Use the reusable [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-prompt)
