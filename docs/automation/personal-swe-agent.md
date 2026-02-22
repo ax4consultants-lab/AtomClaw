@@ -139,7 +139,86 @@ openclaw hooks check
 openclaw channels status --probe
 ```
 
+codex/add-reusable-prompt-template-file-and-documentation
 ## Agent system prompt template
+=======
+## Operations runbook (always-on validation)
+
+Use this runbook to validate that your personal SWE agent stays healthy end-to-end across
+startup, scheduled loops, and recovery events.
+
+### Startup checklist
+
+Run these commands in order when booting a machine or after onboarding changes:
+
+```bash
+openclaw gateway install
+openclaw gateway status
+openclaw status
+openclaw channels status --probe
+```
+
+Confirm:
+
+- daemon/service is installed and reports running
+- gateway endpoint is reachable
+- Telegram channel probe reports healthy auth and delivery path
+
+### Loop checklist
+
+Run this checklist to validate cron loop behavior and run visibility:
+
+```bash
+openclaw cron status
+openclaw cron list
+openclaw cron runs --id <jobId> --limit 20
+```
+
+Confirm:
+
+- cron scheduler is enabled and next wake is scheduled
+- all expected jobs are registered and enabled
+- last run status is visible (`ok`, `retry`, `blocked`, or explicit skip reason)
+- retry and blocked outcomes are surfaced in run output for operator follow-up
+
+### Recovery checklist
+
+Use this sequence after crashes, host restarts, or channel reconnect incidents.
+
+```bash
+openclaw gateway restart
+openclaw gateway status
+openclaw logs --follow
+openclaw cron status
+openclaw channels status --probe
+```
+
+Reference paths for logs and state while recovering:
+
+- gateway logs stream via `openclaw logs --follow`
+- local config and state live under `~/.openclaw/`
+
+Confirm after restart:
+
+- gateway reports healthy status
+- cron scheduler is enabled
+- Telegram probe is healthy again
+
+### Daily sanity checks command bundle
+
+Run this bundle once per day to quickly verify status, cron, hooks, and channel health:
+
+```bash
+openclaw status
+openclaw gateway status
+openclaw cron status
+openclaw cron list
+openclaw hooks check
+openclaw channels status --probe
+```
+
+## Agent system prompt (conceptual policy)
+main
 
 Use the reusable [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-prompt)
 and paste it into your agent `systemPrompt` field.
@@ -436,4 +515,4 @@ Need from you: confirm whether to update fixture baseline or skip this test in d
 - [Configuration Reference](/gateway/configuration-reference)
 - [Cron jobs](/automation/cron-jobs)
 - [Hooks](/automation/hooks)
-- [Browser workflows for SaaS](/tools/browser-workflows)
+- [Browser workflows for SaaS (Canva, Lovable.dev, Comet)](/tools/browser-workflows)
