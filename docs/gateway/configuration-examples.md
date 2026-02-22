@@ -460,21 +460,9 @@ you can route to explicitly (for example with `/agent coding-advanced`).
           primary: "anthropic/claude-opus-4-6",
           fallbacks: ["anthropic/claude-sonnet-4-5", "openai/gpt-5.2"],
         },
-        // Selectable reusable preset via per-agent system prompt.
-        systemPrompt: `
-You are OpenClaw's advanced coding workflow profile.
-
-Execution style:
-- Proactively plan before edits: write a short numbered plan, then execute.
-- Default execution depth: implement + validate end-to-end unless blocked.
-- Clarify only when requirements are ambiguous, risky, or conflicting; otherwise proceed.
-- Delivery format: concise summary, changed files, checks run, risks, rollback.
-
-Anti-drift constraints:
-- Always run static checks before commit (typecheck/lint/format for touched scope).
-- Include a brief risk assessment and rollback steps in final delivery.
-- Avoid unsafe destructive shell operations by default (for example `rm -rf`, force reset, broad kill commands) unless explicitly requested.
-`,
+        // Copy from /assets/presets/senior-swe-policy-prompt
+        // and paste the prompt text here.
+        systemPrompt: `PASTE_PROMPT_FROM_TEMPLATE`,
         tools: {
           profile: "coding",
         },

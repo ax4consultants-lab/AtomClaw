@@ -139,34 +139,50 @@ openclaw hooks check
 openclaw channels status --probe
 ```
 
-## Agent system prompt (conceptual policy)
+## Agent system prompt template
 
-Set your agent's behavioral policy by providing a system prompt through the gateway's agent
-configuration interface. The following is an example policy you can adapt:
+Use the reusable [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-prompt)
+and paste it into your agent `systemPrompt` field.
+
+Exactly where to place it:
+
+- **Per-agent profile:** `agents.list[].systemPrompt` (recommended for a dedicated autonomous profile)
+- **Global default:** `agents.defaults.systemPrompt` (applies to all agents unless overridden)
+
+For full placement examples, see [Configuration](/gateway/configuration#reusable-senior-swe-prompt-template).
+
+### Telegram example (autonomous repo task)
 
 ```text
-You are my personal SWE agent for local repositories.
+You (Telegram): /agent senior-swe
+OpenClaw: Switched to senior-swe.
 
-Scope and safety:
-- Work only under approved roots: ~/code and ~/scratch/review.
-- Never cd, read, or write outside approved roots.
-- Do not use destructive shell operations (rm -rf, git reset --hard, git clean -fdx) unless user explicitly authorizes in this chat.
+You (Telegram): In openclaw repo, add a reusable prompt template file, wire it into setup docs, and open a PR.
+OpenClaw:
+Plan:
+1) Inspect docs for current prompt/setup guidance.
+2) Add standalone senior SWE prompt template with explicit copy target.
+3) Cross-link setup/config docs and add one Telegram behavior example.
+4) Run docs checks and open PR with summary, risk, and rollback.
 
-Tool policy:
-- Shell: allow read/build/test commands; deny package publish, release, and host-level admin commands.
-- Git: allow status/diff/branch/log/add/commit/push on current repo; deny force-push, branch deletion, history rewrites.
-- Network: allow docs and package metadata domains only; deny arbitrary curl/wget and unknown hosts.
+Execution update:
+- Added docs/assets/presets/senior-swe-policy-prompt.md.
+- Updated docs/automation/personal-swe-agent.md and docs/gateway/configuration.md with placement instructions.
 
-Branch and PR workflow:
-- Branch naming must be feat/<topic>, fix/<topic>, chore/<topic>, or docs/<topic>.
-- Commit subject must match: <type>(<scope>): <summary>.
-- Before each commit, run required checks and capture pass/fail in notes.
-- PR body must include: Summary, Changes, Tests, Risks, Rollback, Follow ups.
+Checks Run:
+- pnpm check
 
-Failure handling:
-- Retry budget: at most 2 retries per failing command, with one short diagnosis step between retries.
-- Stop and ask user when blocked by missing credentials, ambiguous product decisions, destructive changes, or repeated test failures.
-- Telegram status must include: objective, attempted commands, first actionable error, files changed, and next request for user.
+Delivery:
+Summary:
+- Reusable prompt template added and linked from setup/config docs.
+Changed Files:
+- docs/assets/presets/senior-swe-policy-prompt.md
+- docs/automation/personal-swe-agent.md
+- docs/gateway/configuration.md
+Risks:
+- Low: docs-only changes.
+Rollback:
+- Revert this PR commit to restore previous docs.
 ```
 
 ## Hooks (conceptual policy)
