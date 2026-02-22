@@ -41,6 +41,104 @@ Use it when you want one agent profile that can:
 > Policy rules (system prompt, hooks, scratchpad) and cron job definitions are configured separately
 > as described in the sections below.
 
+## Implementation steps (commands and config locations)
+
+Use this section to apply the preset with concrete CLI commands and file paths.
+
+### 1) Set base workspace and cron config
+
+The minimal JSON5 block above stays schema-valid in `~/.openclaw/openclaw.json`. Apply the same
+values with CLI writes:
+
+```bash
+openclaw config set agents.defaults.workspace "~/code"
+openclaw config set cron.enabled true
+openclaw config set cron.maxConcurrentRuns 1
+```
+
+### 2) Add policy hooks with the supported hook layout
+
+Per [Hooks](/automation/hooks), define each hook as a directory with `HOOK.md` and `handler.ts`.
+Create policy hooks in your default workspace so they apply to this agent profile:
+
+```bash
+mkdir -p ~/code/hooks/workspace-allowlist
+mkdir -p ~/code/hooks/block-destructive-shell
+mkdir -p ~/code/hooks/require-checks-before-commit
+mkdir -p ~/code/hooks/branch-name-policy
+mkdir -p ~/code/hooks/commit-subject-policy
+mkdir -p ~/code/hooks/block-history-rewrite
+mkdir -p ~/code/hooks/allow-docs-and-metadata-only
+```
+
+Create one hook manifest per directory (same schema for each hook):
+
+```yaml
+---
+name: workspace-allowlist
+description: "Deny shell commands outside approved roots"
+metadata: { "openclaw": { "emoji": "🛡️", "events": ["command"], "requires": { "bins": ["node"] } } }
+---
+```
+
+Then implement each `handler.ts` with a default `HookHandler` export that enforces its policy
+(workspace allowlist, destructive command blocking, commit/test gates, branch/commit regex checks,
+and outbound domain allowlist).
+
+After files are in place, verify discovery and enable hooks:
+
+```bash
+openclaw hooks list --verbose
+openclaw hooks enable workspace-allowlist
+openclaw hooks enable block-destructive-shell
+openclaw hooks enable require-checks-before-commit
+openclaw hooks enable branch-name-policy
+openclaw hooks enable commit-subject-policy
+openclaw hooks enable block-history-rewrite
+openclaw hooks enable allow-docs-and-metadata-only
+openclaw hooks check
+```
+
+### 3) Create maintenance cron jobs with `openclaw cron add`
+
+Create concrete jobs matching the schedule in this preset:
+
+```bash
+openclaw cron add \
+  --name "maintenance-deps-audit" \
+  --cron "0 9 * * 1" \
+  --tz "UTC" \
+  --session isolated \
+  --message "Run dependency and lockfile health checks for the current workspace, then summarize required updates."
+
+openclaw cron add \
+  --name "maintenance-doc-link-check" \
+  --cron "0 15 * * 3" \
+  --tz "UTC" \
+  --session isolated \
+  --message "Run docs link checks and report broken links with file paths and suggested fixes."
+
+openclaw cron add \
+  --name "maintenance-pr-hygiene" \
+  --cron "0 12 * * 5" \
+  --tz "UTC" \
+  --session isolated \
+  --message "Review stale branches and open pull requests, then prepare a concise hygiene summary and next actions."
+```
+
+### 4) Final verification checklist
+
+Run this checklist to confirm the profile is active:
+
+```bash
+openclaw config get agents.defaults.workspace
+openclaw config get cron.enabled
+openclaw config get cron.maxConcurrentRuns
+openclaw cron list
+openclaw hooks check
+openclaw channels status --probe
+```
+
 ## Agent system prompt (conceptual policy)
 
 Set your agent's behavioral policy by providing a system prompt through the gateway's agent
@@ -108,11 +206,11 @@ For PRs, ensure the body includes: Summary, Changes, Tests, Risks, Rollback, and
 The `cron` config key enables scheduled agent runs. The following jobs illustrate the intended
 maintenance schedule. Refer to [Cron jobs](/automation/cron-jobs) for supported job configuration.
 
-| Job | Schedule | Task |
-|-----|----------|------|
-| `maintenance-deps-audit` | Every Monday 09:00 UTC | Dependency and lockfile health checks |
-| `maintenance-doc-link-check` | Every Wednesday 15:00 UTC | Docs link checks, report broken links |
-| `maintenance-pr-hygiene` | Every Friday 12:00 UTC | Review stale branches, prepare PR drafts |
+| Job                          | Schedule                  | Task                                     |
+| ---------------------------- | ------------------------- | ---------------------------------------- |
+| `maintenance-deps-audit`     | Every Monday 09:00 UTC    | Dependency and lockfile health checks    |
+| `maintenance-doc-link-check` | Every Wednesday 15:00 UTC | Docs link checks, report broken links    |
+| `maintenance-pr-hygiene`     | Every Friday 12:00 UTC    | Review stale branches, prepare PR drafts |
 
 ## Policy examples included in the preset
 
