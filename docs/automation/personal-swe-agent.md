@@ -28,7 +28,25 @@ Use it when you want one agent profile that can:
   agents: {
     defaults: {
       workspace: "~/code",
-      systemPrompt: `
+    },
+  },
+  cron: {
+    enabled: true,
+    maxConcurrentRuns: 1,
+  },
+}
+```
+
+> **Note:** The fields above are the only keys validated by `AgentDefaultsSchema` and the `cron` schema.
+> Policy rules (system prompt, hooks, scratchpad) and cron job definitions are configured separately
+> as described in the sections below.
+
+## Agent system prompt (conceptual policy)
+
+Set your agent's behavioral policy by providing a system prompt through the gateway's agent
+configuration interface. The following is an example policy you can adapt:
+
+```text
 You are my personal SWE agent for local repositories.
 
 Scope and safety:
@@ -51,116 +69,50 @@ Failure handling:
 - Retry budget: at most 2 retries per failing command, with one short diagnosis step between retries.
 - Stop and ask user when blocked by missing credentials, ambiguous product decisions, destructive changes, or repeated test failures.
 - Telegram status must include: objective, attempted commands, first actionable error, files changed, and next request for user.
-      `,
-      hooks: {
-        beforeCommand: {
-          shell: [
-            {
-              name: "workspace-allowlist",
-              match: "*",
-              denyIfCwdOutside: ["~/code", "~/scratch/review"],
-              message: "Command blocked. Run only inside approved repo roots.",
-            },
-            {
-              name: "block-destructive-shell",
-              matchRegex: "(^|\\s)(rm\\s+-rf|sudo\\s+rm|git\\s+clean\\s+-fdx)(\\s|$)",
-              action: "deny",
-              message: "Destructive shell command blocked by preset policy.",
-            },
-            {
-              name: "require-checks-before-commit",
-              matchRegex: "(^|\\s)git\\s+commit(\\s|$)",
-              requireRecentCommands: ["pnpm test", "pnpm build"],
-              within: "30m",
-              action: "deny",
-              message: "Run pnpm test and pnpm build successfully before commit.",
-            },
-          ],
-          git: [
-            {
-              name: "branch-name-policy",
-              on: "branch-create",
-              requireNameRegex: "^(feat|fix|chore|docs)\\/[a-z0-9._-]+$",
-              action: "deny",
-              message: "Branch must match feat|fix|chore|docs/<topic>.",
-            },
-            {
-              name: "commit-subject-policy",
-              on: "commit-msg",
-              requireSubjectRegex: "^(feat|fix|chore|docs|refactor|test)(\\([a-z0-9._-]+\\))?: .+",
-              action: "deny",
-              message: "Commit subject must follow Conventional Commit style.",
-            },
-            {
-              name: "block-history-rewrite",
-              on: "push",
-              denyArgs: ["--force", "--force-with-lease"],
-              action: "deny",
-              message: "Force push is disabled in this preset.",
-            },
-          ],
-          network: [
-            {
-              name: "allow-docs-and-metadata-only",
-              action: "allowlist",
-              hosts: ["docs.openclaw.ai", "registry.npmjs.org", "api.github.com", "github.com"],
-              message: "Network access restricted to approved documentation and metadata hosts.",
-            },
-          ],
-        },
-      },
-      scratchpad: {
-        commitChecklist: [
-          "Run pnpm test",
-          "Run pnpm build",
-          "Summarize changed files",
-          "Write a Conventional Commit message",
-        ],
-        pullRequestTemplate: {
-          requiredFields: ["Summary", "Changes", "Tests", "Risks", "Rollback", "Follow ups"],
-        },
-      },
-    },
-  },
-
-  cron: {
-    enabled: true,
-    maxConcurrentRuns: 1,
-    jobs: [
-      {
-        id: "maintenance-deps-audit",
-        schedule: { kind: "cron", expr: "0 9 * * 1", tz: "UTC" },
-        sessionTarget: "isolated",
-        payload: {
-          kind: "agentTurn",
-          message: "Run dependency and lockfile health checks in approved repos and report only actionable issues.",
-        },
-        delivery: { mode: "announce", channel: "telegram", to: "tg:my-self-chat" },
-      },
-      {
-        id: "maintenance-doc-link-check",
-        schedule: { kind: "cron", expr: "0 15 * * 3", tz: "UTC" },
-        sessionTarget: "isolated",
-        payload: {
-          kind: "agentTurn",
-          message: "Run docs link checks and summarize broken links with exact file paths.",
-        },
-        delivery: { mode: "announce", channel: "telegram", to: "tg:my-self-chat" },
-      },
-      {
-        id: "maintenance-pr-hygiene",
-        schedule: { kind: "cron", expr: "0 12 * * 5", tz: "UTC" },
-        sessionTarget: "isolated",
-        payload: {
-          kind: "agentTurn",
-          message: "Review open branches for stale work and prepare next-step PR drafts with required sections.",
-        },
-        delivery: { mode: "announce", channel: "telegram", to: "tg:my-self-chat" },
-      },
-    ],
-  },
-}
 ```
+
+## Hooks (conceptual policy)
+
+The following hook definitions describe the intended enforcement policy for this preset.
+Refer to the [Hooks](/automation/hooks) documentation for the supported configuration format.
+
+**Shell hooks:**
+
+- `workspace-allowlist`: deny commands run outside `~/code` or `~/scratch/review`.
+- `block-destructive-shell`: deny `rm -rf`, `sudo rm`, and `git clean -fdx`.
+- `require-checks-before-commit`: deny `git commit` unless `pnpm test` and `pnpm build` succeeded within the last 30 minutes.
+
+**Git hooks:**
+
+- `branch-name-policy`: deny branch creation unless the name matches `^(feat|fix|chore|docs)/[a-z0-9._-]+$`.
+- `commit-subject-policy`: deny commit unless the subject matches Conventional Commit style.
+- `block-history-rewrite`: deny `git push --force` and `git push --force-with-lease`.
+
+**Network hooks:**
+
+- `allow-docs-and-metadata-only`: restrict outbound requests to `docs.openclaw.ai`, `registry.npmjs.org`, `api.github.com`, and `github.com`.
+
+## Scratchpad checklist (conceptual)
+
+Use a scratchpad or notes section to track these items before each commit:
+
+- Run `pnpm test`
+- Run `pnpm build`
+- Summarize changed files
+- Write a Conventional Commit message
+
+For PRs, ensure the body includes: Summary, Changes, Tests, Risks, Rollback, and Follow ups.
+
+## Cron maintenance jobs (conceptual)
+
+The `cron` config key enables scheduled agent runs. The following jobs illustrate the intended
+maintenance schedule. Refer to [Cron jobs](/automation/cron-jobs) for supported job configuration.
+
+| Job | Schedule | Task |
+|-----|----------|------|
+| `maintenance-deps-audit` | Every Monday 09:00 UTC | Dependency and lockfile health checks |
+| `maintenance-doc-link-check` | Every Wednesday 15:00 UTC | Docs link checks, report broken links |
+| `maintenance-pr-hygiene` | Every Friday 12:00 UTC | Review stale branches, prepare PR drafts |
 
 ## Policy examples included in the preset
 
@@ -172,10 +124,10 @@ Failure handling:
 ### Preferred branch naming
 
 - Required branch name format:
-  - `feat/<topic>`
-  - `fix/<topic>`
-  - `chore/<topic>`
-  - `docs/<topic>`
+  - `feat/`
+  - `fix/`
+  - `chore/`
+  - `docs/`
 
 ### Commit message pattern
 
