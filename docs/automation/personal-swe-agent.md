@@ -139,9 +139,8 @@ openclaw hooks check
 openclaw channels status --probe
 ```
 
-codex/add-reusable-prompt-template-file-and-documentation
 ## Agent system prompt template
-=======
+
 ## Operations runbook (always-on validation)
 
 Use this runbook to validate that your personal SWE agent stays healthy end-to-end across
@@ -218,7 +217,6 @@ openclaw channels status --probe
 ```
 
 ## Agent system prompt (conceptual policy)
-main
 
 Use the reusable [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-prompt)
 and paste it into your agent `systemPrompt` field.
@@ -284,6 +282,148 @@ Refer to the [Hooks](/automation/hooks) documentation for the supported configur
 **Network hooks:**
 
 - `allow-docs-and-metadata-only`: restrict outbound requests to `docs.openclaw.ai`, `registry.npmjs.org`, `api.github.com`, and `github.com`.
+
+## Privacy-by-default hook examples (enforceable)
+
+Use these concrete examples to enforce deny-by-default data egress for autonomous runs.
+
+### 1) Deny-by-default outbound policy (allowlist only)
+
+Create a dedicated hook:
+
+```bash
+mkdir -p ~/code/hooks/outbound-deny-by-default
+```
+
+```md
+---
+name: outbound-deny-by-default
+description: "Block all outbound network calls unless host is allowlisted"
+metadata: { "openclaw": { "emoji": "🌐", "events": ["command"], "requires": { "bins": ["node"] } } }
+---
+```
+
+```ts
+// ~/code/hooks/outbound-deny-by-default/handler.ts
+import type { HookHandler } from "openclaw/hooks";
+
+const ALLOWLIST = new Set([
+  "docs.openclaw.ai",
+  "registry.npmjs.org",
+  "api.github.com",
+  "github.com",
+]);
+
+const URL_ARG = /(https?:\/\/[^\s"']+)/g;
+
+const handler: HookHandler = async ({ event }) => {
+  const command = event.command ?? "";
+  const matches = [...command.matchAll(URL_ARG)].map((m) => new URL(m[1]).hostname);
+
+  for (const host of matches) {
+    if (!ALLOWLIST.has(host)) {
+      return {
+        allow: false,
+        reason: `Outbound denied by default. Host not allowlisted: ${host}`,
+      };
+    }
+  }
+
+  return { allow: true };
+};
+
+export default handler;
+```
+
+### 2) Pre-send approval gate for external data transfer
+
+Require an explicit in-session approval token before any send/upload/export command:
+
+```bash
+mkdir -p ~/code/hooks/require-pre-send-approval
+```
+
+```md
+---
+name: require-pre-send-approval
+description: "Require user approval marker before external transfer commands"
+metadata: { "openclaw": { "emoji": "✋", "events": ["command"], "requires": { "bins": ["node"] } } }
+---
+```
+
+```ts
+// ~/code/hooks/require-pre-send-approval/handler.ts
+import type { HookHandler } from "openclaw/hooks";
+
+const TRANSFER_COMMAND =
+  /\b(curl|wget|scp|rsync|gh\s+release\s+upload|aws\s+s3\s+cp|openclaw\s+message\s+send)\b/i;
+const APPROVAL_TOKEN = /\[approved:external-transfer\]/i;
+
+const handler: HookHandler = async ({ event, session }) => {
+  const command = event.command ?? "";
+  const sessionNotes = session?.notes ?? "";
+
+  if (!TRANSFER_COMMAND.test(command)) return { allow: true };
+  if (APPROVAL_TOKEN.test(sessionNotes)) return { allow: true };
+
+  return {
+    allow: false,
+    reason:
+      "Blocked external transfer. Ask user for explicit approval and add [approved:external-transfer] in session notes.",
+  };
+};
+
+export default handler;
+```
+
+### 3) Block upload/export/tool actions unless approved in-session
+
+Use a second gate for common high-risk tool actions:
+
+```bash
+mkdir -p ~/code/hooks/block-unapproved-exports
+```
+
+```ts
+// ~/code/hooks/block-unapproved-exports/handler.ts
+import type { HookHandler } from "openclaw/hooks";
+
+const HIGH_RISK =
+  /\b(upload|export|publish|send-file|share-link|gh\s+api\s+repos\/.*\/releases)\b/i;
+const APPROVAL = /\[approved:export\]/i;
+
+const handler: HookHandler = async ({ event, session }) => {
+  const command = event.command ?? "";
+  const sessionNotes = session?.notes ?? "";
+
+  if (!HIGH_RISK.test(command)) return { allow: true };
+  if (APPROVAL.test(sessionNotes)) return { allow: true };
+
+  return {
+    allow: false,
+    reason:
+      "Upload/export/tool action blocked. Require explicit in-session approval token [approved:export].",
+  };
+};
+
+export default handler;
+```
+
+### 4) Verify hooks/policies are active before autonomous runs
+
+Run this checklist before any unattended run:
+
+```bash
+openclaw hooks list --verbose
+openclaw hooks check
+openclaw hooks enable outbound-deny-by-default
+openclaw hooks enable require-pre-send-approval
+openclaw hooks enable block-unapproved-exports
+openclaw hooks check
+openclaw status
+```
+
+Expected result: each hook shows as discovered + enabled, and `openclaw hooks check` returns success.
 
 ## Scratchpad checklist (conceptual)
 
