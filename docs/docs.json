@@ -981,6 +981,7 @@
                 "group": "Browser",
                 "pages": [
                   "tools/browser",
+                  "tools/browser-workflows",
                   "tools/browser-login",
                   "tools/chrome-extension",
                   "tools/browser-linux-troubleshooting"
