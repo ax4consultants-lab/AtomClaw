@@ -201,6 +201,127 @@ Use a scratchpad or notes section to track these items before each commit:
 
 For PRs, ensure the body includes: Summary, Changes, Tests, Risks, Rollback, and Follow ups.
 
+## Runnable GitHub workflow (CLI)
+
+Use this sequence when the autonomous run needs to make a normal docs or code contribution
+through GitHub.
+
+### Prerequisites
+
+Before changing files, confirm both GitHub auth and repository access:
+
+1. GitHub CLI is installed: `gh --version`
+2. CLI session/token is valid for the expected account: `gh auth status`
+3. API access works with current token/session: `gh api user --jq .login`
+4. Remote is reachable and you can read refs:
+   - `git remote -v`
+   - `git ls-remote --heads origin`
+5. Push permission check (non-destructive probe):
+   - `gh repo view --json nameWithOwner,viewerPermission --jq '.nameWithOwner + " " + .viewerPermission'`
+
+If any prerequisite fails, stop and send a blocked Telegram update before attempting edits.
+
+### Step-by-step command flow
+
+Run the following commands in order, replacing placeholder values with your target repo and branch:
+
+```bash
+# 1) Clone or enter repo
+git clone git@github.com:<owner>/<repo>.git
+cd <repo>
+
+# 2) Sync with default branch
+git fetch origin
+git checkout main
+git pull --rebase origin main
+
+# 3) Create a policy-compliant branch
+git checkout -b docs/<topic>
+
+# 4) Edit files
+$EDITOR docs/automation/personal-swe-agent.md
+
+# 5) Validate changes (adjust commands to repo standards)
+pnpm test
+pnpm build
+
+# 6) Commit
+git add docs/automation/personal-swe-agent.md
+git commit -m "docs(automation): add runnable GitHub workflow guidance"
+
+# 7) Push branch
+git push -u origin docs/<topic>
+```
+
+### Pull request creation method (required)
+
+Create the PR with GitHub CLI using a real multiline body (heredoc), not escaped `\n` strings.
+The body must include all required sections: **Summary, Changes, Tests, Risks, Rollback, Follow ups**.
+
+```bash
+gh pr create \
+  --base main \
+  --head docs/<topic> \
+  --title "docs(automation): add runnable GitHub workflow guidance" \
+  -F - <<'EOF'
+## Summary
+- Brief objective and user impact.
+
+## Changes
+- Key file and behavior/documentation updates.
+
+## Tests
+- Commands run and pass/fail results.
+
+## Risks
+- Known risks, assumptions, or edge cases.
+
+## Rollback
+- Exact revert path (for example: revert commit or close PR without merge).
+
+## Follow ups
+- Any deferred cleanup or tracking items.
+EOF
+```
+
+After creation, record the PR URL from `gh pr view --json url --jq .url`.
+
+### Stop conditions and user-confirmation boundaries
+
+Stop immediately and request explicit user confirmation before continuing when:
+
+- auth/session checks fail (`gh auth status`, `gh api user`)
+- repo permission is below write/maintain/admin
+- push is rejected by branch protection or permission errors
+- `git pull --rebase` has conflicts that require semantic decisions
+- commit would include unrelated files or secrets
+- required checks fail repeatedly and root cause is not clearly transient
+- any destructive action is needed (`git push --force`, branch deletion, history rewrite)
+
+Do **not** bypass these boundaries autonomously. Ask for a clear yes/no decision from the user.
+
+### Blocked state Telegram update template (GitHub failures)
+
+Use this template when blocked specifically by GitHub auth/push/CI issues:
+
+```text
+Status: blocked on GitHub workflow
+Objective: <goal>
+Step: <auth check | push | CI>
+Commands: <exact commands attempted>
+Failure type: <auth denied | push rejected | CI failed>
+First actionable error: <single actionable line>
+Changed files: <comma-separated list>
+Retries: <n>/2
+Need from you: <credential refresh | permission grant | merge/rebase guidance | CI override decision>
+```
+
+Failure-specific examples:
+
+- **Auth denied**: request refreshed `gh auth login` session or token scope update.
+- **Push rejected**: request branch protection guidance or permission grant.
+- **CI fail**: request decision to fix forward, rerun, or pause merge.
+
 ## Cron maintenance jobs (conceptual)
 
 The `cron` config key enables scheduled agent runs. The following jobs illustrate the intended
