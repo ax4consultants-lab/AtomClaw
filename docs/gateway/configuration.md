@@ -83,6 +83,7 @@ Use the [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-pr
 ```
 
 For a full autonomous setup walkthrough, see [Personal SWE agent preset](/automation/personal-swe-agent).
+For local self-hosted model routing only, see [Local-only operation mode](/automation/personal-swe-agent#local-only-operation-mode).
 
 ## Strict validation
 
