@@ -44,3 +44,16 @@
 - “You’ve got standup in 20 min. Finishing commit, then silent until after.”
 - “This pattern is ancient. Refactor in 15 min or keep limping?”
 - “Daily sweep: AtomClaw up to date, 2 open PRs. Review queue or auto-merge?”
+
+
+---
+
+## Usage
+
+On any host where you run AtomClaw/OpenClaw:
+
+1. Copy this file to: `~/.openclaw/workspace/BOOT.md`
+2. Copy `docs/SOUL.md` to: `~/.openclaw/workspace/SOUL.md`
+3. Copy `docs/AGENTS.md` to: `~/.openclaw/workspace/AGENTS.md`
+4. Ensure you have a valid `~/.openclaw/openclaw.json`
+5. Restart your agent so it reloads BOOT/SOUL/AGENTS at startup.
