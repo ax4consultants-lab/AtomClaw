@@ -1,178 +1,214 @@
 ---
-summary: "Per-service browser automation playbooks for managed profiles and remote CDP"
+summary: "Per-service browser automation runbooks for Canva, Lovable.dev, and Comet"
 read_when:
-  - Setting up browser automation for SaaS services
-  - Choosing between local managed profiles and remote CDP attach
-  - Handling Comet or hosted browser CDP compatibility gaps
+  - Automating Canva, Lovable.dev, or Comet with OpenClaw browser profiles
+  - Setting up durable login sessions for SaaS automation
+  - Handling Comet remote CDP compatibility and fallback
 title: "Browser workflows for SaaS"
 ---
 
 # Browser workflows for SaaS
 
-Use this guide to standardize browser automation across services while keeping sessions isolated and repeatable.
+This guide provides concrete runbooks for Canva, Lovable.dev, and Comet using dedicated OpenClaw browser profiles.
 
-## Service profile setup patterns
+## Shared setup and safety baseline
 
-Set one stable profile name per service (for example `github`, `linear`, `figma`, `comet`) under `browser.profiles`.
-
-### Pattern A: local managed browser profile
-
-Use this when OpenClaw should launch and manage the browser directly.
+Define one persistent profile per service under `browser.profiles.<name>` and keep names stable.
 
 ```json5
 {
   browser: {
     enabled: true,
-    defaultProfile: "github",
+    defaultProfile: "canva",
     profiles: {
-      github: { cdpPort: 18810, color: "#24292F" },
-      linear: { cdpPort: 18811, color: "#5E6AD2" },
-      figma: { cdpPort: 18812, color: "#A259FF" },
+      canva: { cdpPort: 18830, color: "#00C4CC" },
+      lovable: { cdpPort: 18831, color: "#7C3AED" },
+      comet: { cdpUrl: "http://127.0.0.1:9222", color: "#FF6A00" },
+      "comet-managed": { cdpPort: 18832, color: "#FF6A00" },
     },
   },
 }
 ```
 
-### Pattern B: remote CDP attach
+Session and credential handling rules:
 
-Use this when a remote browser runtime exposes CDP endpoints.
+- Perform first login manually for each profile so MFA and consent prompts are completed once.
+- Reuse the same profile name for every later run to preserve cookies and local storage.
+- Treat profile data as sensitive because authenticated sessions are stored there.
+- Do not commit credentials, tokenized `cdpUrl` values, cookie exports, or screenshots containing secrets.
+- Prefer environment variables or a secrets manager for any remote CDP credentials.
+
+## Canva workflow
+
+### Profile setup and auth persistence
+
+Use a dedicated managed profile:
 
 ```json5
 {
   browser: {
-    enabled: true,
     profiles: {
-      comet: { cdpUrl: "https://cdp.example.internal", color: "#FF6A00" },
-      browserless: { cdpUrl: "https://production-sfo.browserless.io", color: "#00A36C" },
+      canva: { cdpPort: 18830, color: "#00C4CC" },
     },
   },
 }
 ```
 
-Use per-service profile names even for remote CDP so automation prompts and scripts remain deterministic.
-
-## Login, session persistence, and credential safety
-
-Recommended strategy:
-
-1. Bootstrap each profile once with manual login and MFA.
-2. Reuse the same profile name for every future run.
-3. Re-auth only when session expiration or policy changes require it.
-
-Quick bootstrap sequence:
+Bootstrap and persist login:
 
 ```bash
-openclaw browser --browser-profile github start
-openclaw browser --browser-profile github open "https://github.com/login"
+openclaw browser --browser-profile canva start
+openclaw browser --browser-profile canva open "https://www.canva.com/login"
 ```
 
-Then complete login interactively and verify persistence:
+After manual login completes, restart and verify the session is still active:
 
 ```bash
-openclaw browser --browser-profile github stop
-openclaw browser --browser-profile github start
-openclaw browser --browser-profile github open "https://github.com"
+openclaw browser --browser-profile canva stop
+openclaw browser --browser-profile canva start
+openclaw browser --browser-profile canva open "https://www.canva.com/"
+openclaw browser --browser-profile canva snapshot --interactive
 ```
 
-Security notes:
+### Operation sequence
 
-- Browser profile data can include active cookies, tokens, and local storage state.
-- Keep profile directories and config files private to your user account.
-- Do not commit authenticated `cdpUrl` values, tokens, or exported cookie data.
-- Prefer environment variables or a secrets manager for remote CDP credentials.
-- Restrict remote CDP endpoints to private networking (loopback, VPN, or tailnet).
-
-## Per-service runbooks
-
-Use this checklist for each service run.
-
-### 1) Open app
+1. Open Canva home or workspace.
+2. Navigate to the target design/project URL.
+3. Upload local assets.
+4. Export/download the output.
+5. Verify completion through UI confirmation + download listing.
 
 ```bash
-openclaw browser --browser-profile linear open "https://linear.app"
+openclaw browser --browser-profile canva open "https://www.canva.com/"
+openclaw browser --browser-profile canva navigate "https://www.canva.com/folder/all-your-designs"
+openclaw browser --browser-profile canva upload ./artifacts/brand-kit/logo.png
+openclaw browser --browser-profile canva snapshot --interactive
+openclaw browser --browser-profile canva downloads --json
+openclaw browser --browser-profile canva screenshot --full-page
 ```
 
-### 2) Navigate to project or context
+## Lovable.dev workflow
+
+### Profile setup and auth persistence
+
+Use a dedicated managed profile:
+
+```json5
+{
+  browser: {
+    profiles: {
+      lovable: { cdpPort: 18831, color: "#7C3AED" },
+    },
+  },
+}
+```
+
+Bootstrap and persist login:
 
 ```bash
-openclaw browser --browser-profile linear navigate "https://linear.app/openclaw/team/ENG"
-openclaw browser --browser-profile linear snapshot --interactive
+openclaw browser --browser-profile lovable start
+openclaw browser --browser-profile lovable open "https://lovable.dev/login"
 ```
 
-### 3) Upload or download assets
+After manual login, validate persistence with a restart:
 
 ```bash
-openclaw browser --browser-profile linear upload ./artifacts/release-notes.pdf
-openclaw browser --browser-profile linear downloads --json
+openclaw browser --browser-profile lovable stop
+openclaw browser --browser-profile lovable start
+openclaw browser --browser-profile lovable open "https://lovable.dev/projects"
+openclaw browser --browser-profile lovable snapshot --interactive
 ```
 
-### 4) Verify completion
+### Operation sequence
 
-Use UI plus network verification together.
+1. Open Lovable.dev and go to project list.
+2. Navigate to a specific project/editor.
+3. Upload artifacts (brief, image, or supporting file).
+4. Trigger build or export workflow.
+5. Verify completion from status text and network calls.
 
 ```bash
-openclaw browser --browser-profile linear snapshot --interactive --json
-openclaw browser --browser-profile linear requests --filter api --json
-openclaw browser --browser-profile linear screenshot --full-page
+openclaw browser --browser-profile lovable open "https://lovable.dev/projects"
+openclaw browser --browser-profile lovable navigate "https://lovable.dev/projects/<project-id>"
+openclaw browser --browser-profile lovable upload ./artifacts/spec.md
+openclaw browser --browser-profile lovable snapshot --interactive --json
+openclaw browser --browser-profile lovable requests --filter api --json
+openclaw browser --browser-profile lovable downloads --json
 ```
 
-Verification signals to capture:
+## Comet workflow
 
-- UI confirmation text or status badge in snapshot output.
-- Expected API status codes or endpoint calls in `requests` output.
-- Final screenshot artifact for audit trails.
+### Profile setup and auth persistence
 
-## Comet compatibility checks and fallback
+Use a remote CDP profile when Comet exposes compatible endpoints, plus a managed fallback profile.
 
-Some Comet deployments do not expose complete CDP discovery and websocket endpoints.
+```json5
+{
+  browser: {
+    profiles: {
+      comet: { cdpUrl: "http://127.0.0.1:9222", color: "#FF6A00" },
+      "comet-managed": { cdpPort: 18832, color: "#FF6A00" },
+    },
+  },
+}
+```
 
-### Compatibility check
+For remote attach, keep credentials out of tracked files and prefer secret-backed env var interpolation in your runtime.
 
-Run both endpoint checks before using a remote Comet profile:
+Bootstrap login on whichever profile you plan to run routinely (`comet` or `comet-managed`), then restart and verify the logged-in landing page with `snapshot --interactive`.
+
+### Comet CDP compatibility checks
+
+Run discovery checks before automation:
 
 ```bash
 curl -fsS "http://127.0.0.1:9222/json/version"
 curl -fsS "http://127.0.0.1:9222/json/list"
+openclaw browser --browser-profile comet status
+openclaw browser --browser-profile comet start
 ```
 
-Treat CDP attach as unavailable when:
+Treat attach as incompatible when any check fails, times out, returns invalid DevTools JSON, or repeatedly disconnects during startup.
 
-- Either command times out or fails.
-- Responses are not valid DevTools JSON payloads.
-- WebSocket connect repeatedly fails during OpenClaw profile startup.
+### Fallback path to managed Chromium
 
-### Fallback path: managed Chromium profile
-
-Switch the service to a local managed profile and continue automation:
-
-```json5
-{
-  browser: {
-    profiles: {
-      "comet-managed": { cdpPort: 18820, color: "#FF6A00" },
-    },
-  },
-}
-```
+When attach fails, switch to the managed profile and continue the workflow:
 
 ```bash
 openclaw browser --browser-profile comet-managed start
 openclaw browser --browser-profile comet-managed open "https://comet.example"
+openclaw browser --browser-profile comet-managed snapshot --interactive
 ```
 
-This fallback preserves session persistence and avoids dependency on remote CDP attach.
+### Operation sequence
 
-## Troubleshooting matrix
+1. Open Comet app.
+2. Navigate to target workspace/project.
+3. Upload required artifacts.
+4. Download generated output.
+5. Verify completion in UI and request log.
 
-| Failure                            | Likely cause                                              | Check                                                               | Fix                                                                        |
-| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Auth wall after restart            | Session cookie expired or profile mismatch                | Confirm correct `--browser-profile`; run `snapshot` on landing page | Re-login on the same profile, then retest persistence by restart           |
-| Selector drift or missing target   | UI changed and old selector/ref is stale                  | Run fresh `snapshot --interactive` and inspect refs                 | Replace brittle selector usage with current snapshot refs                  |
-| Upload blocked or no file attached | Hidden file input, permission prompt, or invalid path     | Verify path exists locally; inspect page errors and snapshot        | Use `upload` after focusing the right context, then confirm via UI/network |
-| CDP disconnect during run          | Remote endpoint unstable, idle timeout, or network policy | Check `/json/version`, `/json/list`, and retry profile start        | Reconnect; if repeated, move workflow to managed local profile             |
+```bash
+openclaw browser --browser-profile comet open "https://comet.example"
+openclaw browser --browser-profile comet navigate "https://comet.example/projects/<project-id>"
+openclaw browser --browser-profile comet upload ./artifacts/input.json
+openclaw browser --browser-profile comet requests --filter api --json
+openclaw browser --browser-profile comet downloads --json
+openclaw browser --browser-profile comet screenshot --full-page
+```
+
+## Troubleshooting
+
+| Breakage       | Likely cause                                          | Check                                                                  | Fix                                                                                        |
+| -------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Login expired  | Session timeout, revoked cookies, or SSO revalidation | `snapshot --interactive` on landing page shows login screen            | Re-auth on the same profile and re-run stop/start persistence check                        |
+| Selector drift | UI layout or labels changed                           | Capture fresh snapshot refs and inspect current role tree              | Update automation steps to current refs, avoid stale hardcoded selectors                   |
+| CDP disconnect | Remote Comet CDP endpoint unstable or incompatible    | Check `/json/version`, `/json/list`, and `browser status/start` output | Retry once, then switch to `comet-managed` profile for managed Chromium control            |
+| Blocked upload | Hidden input, permission prompt, or invalid path      | Confirm local file exists and snapshot shows active upload UI          | Re-focus upload surface, run `upload` again, and verify through UI + downloads/API signals |
 
 ## See also
 
 - [Browser](/tools/browser)
+- [Personal SWE agent preset](/automation/personal-swe-agent)
 - [Browser login + X or Twitter posting](/tools/browser-login)
 - [Browser troubleshooting](/tools/browser-linux-troubleshooting)
