@@ -558,7 +558,7 @@ These are useful for “make the site behave like X” workflows:
   execute arbitrary JavaScript in the page context. Prompt injection can steer
   this. Disable it with `browser.evaluateEnabled=false` if you do not need it.
 - For logins and anti-bot notes (X/Twitter, etc.), see [Browser login + X/Twitter posting](/tools/browser-login).
-- For reusable SaaS dashboard automation patterns, see [Browser workflows for SaaS](/tools/browser-workflows).
+- For reusable SaaS dashboard automation patterns and service runbooks, see [Browser workflows for SaaS](/tools/browser-workflows).
 - Keep the Gateway/node host private (loopback or tailnet-only).
 - Remote CDP endpoints are powerful; tunnel and protect them.
 

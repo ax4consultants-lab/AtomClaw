@@ -108,11 +108,11 @@ For PRs, ensure the body includes: Summary, Changes, Tests, Risks, Rollback, and
 The `cron` config key enables scheduled agent runs. The following jobs illustrate the intended
 maintenance schedule. Refer to [Cron jobs](/automation/cron-jobs) for supported job configuration.
 
-| Job | Schedule | Task |
-|-----|----------|------|
-| `maintenance-deps-audit` | Every Monday 09:00 UTC | Dependency and lockfile health checks |
-| `maintenance-doc-link-check` | Every Wednesday 15:00 UTC | Docs link checks, report broken links |
-| `maintenance-pr-hygiene` | Every Friday 12:00 UTC | Review stale branches, prepare PR drafts |
+| Job                          | Schedule                  | Task                                     |
+| ---------------------------- | ------------------------- | ---------------------------------------- |
+| `maintenance-deps-audit`     | Every Monday 09:00 UTC    | Dependency and lockfile health checks    |
+| `maintenance-doc-link-check` | Every Wednesday 15:00 UTC | Docs link checks, report broken links    |
+| `maintenance-pr-hygiene`     | Every Friday 12:00 UTC    | Review stale branches, prepare PR drafts |
 
 ## Policy examples included in the preset
 
@@ -201,3 +201,4 @@ Need from you: confirm whether to update fixture baseline or skip this test in d
 - [Configuration Reference](/gateway/configuration-reference)
 - [Cron jobs](/automation/cron-jobs)
 - [Hooks](/automation/hooks)
+- [Browser workflows for SaaS](/tools/browser-workflows)

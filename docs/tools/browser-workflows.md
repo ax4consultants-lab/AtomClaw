@@ -1,21 +1,23 @@
 ---
-summary: "Targeted SaaS browser workflows using persistent profiles and reusable sessions"
+summary: "Per-service browser automation playbooks for managed profiles and remote CDP"
 read_when:
-  - Automating SaaS dashboards with browser tooling
-  - Setting up per-service browser profiles
-  - Debugging remote CDP attach failures (including Comet)
+  - Setting up browser automation for SaaS services
+  - Choosing between local managed profiles and remote CDP attach
+  - Handling Comet or hosted browser CDP compatibility gaps
 title: "Browser workflows for SaaS"
 ---
 
 # Browser workflows for SaaS
 
-Use this guide when you want repeatable automation for SaaS tools (dashboards, consoles, project UIs) while keeping each service isolated.
+Use this guide to standardize browser automation across services while keeping sessions isolated and repeatable.
 
-## Per-service profile setup
+## Service profile setup patterns
 
-Create one named profile per SaaS service under `browser.profiles.<name>`. Keep profile names stable (`github`, `linear`, `notion`, `comet`) so scripts and prompts stay deterministic.
+Set one stable profile name per service (for example `github`, `linear`, `figma`, `comet`) under `browser.profiles`.
 
-Example:
+### Pattern A: local managed browser profile
+
+Use this when OpenClaw should launch and manage the browser directly.
 
 ```json5
 {
@@ -25,117 +27,152 @@ Example:
     profiles: {
       github: { cdpPort: 18810, color: "#24292F" },
       linear: { cdpPort: 18811, color: "#5E6AD2" },
-      comet: { cdpUrl: "http://127.0.0.1:9222", color: "#FF6A00" },
+      figma: { cdpPort: 18812, color: "#A259FF" },
     },
   },
 }
 ```
 
-Best practices for credential persistence:
+### Pattern B: remote CDP attach
 
-- Keep one profile per service to avoid cookie and local storage cross-talk.
-- Reuse the same profile name for all automation runs so session state persists.
-- Do not commit real credentials, tokens, or authenticated `cdpUrl` values to git.
-- Prefer local config plus secret managers or environment variables for auth material.
-- Treat the managed browser profile directories as sensitive because they can contain active sessions.
+Use this when a remote browser runtime exposes CDP endpoints.
 
-## Login and session strategy
+```json5
+{
+  browser: {
+    enabled: true,
+    profiles: {
+      comet: { cdpUrl: "https://cdp.example.internal", color: "#FF6A00" },
+      browserless: { cdpUrl: "https://production-sfo.browserless.io", color: "#00A36C" },
+    },
+  },
+}
+```
 
-Recommended pattern:
+Use per-service profile names even for remote CDP so automation prompts and scripts remain deterministic.
 
-1. **Bootstrap manually once** per service/profile.
-   - Start profile: `openclaw browser --browser-profile github start`
-   - Open login page and complete auth/MFA interactively.
-2. **Verify persistence** by restarting browser and confirming the app loads authenticated state.
-3. **Automate reuse** in future runs using the same `--browser-profile` without re-running login flows.
-4. **Refresh manually only when needed** (session expiry, password rotation, revoked device trust).
+## Login, session persistence, and credential safety
 
-This keeps automated runs fast and avoids brittle bot-sensitive login sequences.
+Recommended strategy:
 
-## End-to-end SaaS workflow examples
+1. Bootstrap each profile once with manual login and MFA.
+2. Reuse the same profile name for every future run.
+3. Re-auth only when session expiration or policy changes require it.
 
-All examples assume an already-bootstrapped profile with a valid session.
+Quick bootstrap sequence:
 
-### Open a page
+```bash
+openclaw browser --browser-profile github start
+openclaw browser --browser-profile github open "https://github.com/login"
+```
+
+Then complete login interactively and verify persistence:
+
+```bash
+openclaw browser --browser-profile github stop
+openclaw browser --browser-profile github start
+openclaw browser --browser-profile github open "https://github.com"
+```
+
+Security notes:
+
+- Browser profile data can include active cookies, tokens, and local storage state.
+- Keep profile directories and config files private to your user account.
+- Do not commit authenticated `cdpUrl` values, tokens, or exported cookie data.
+- Prefer environment variables or a secrets manager for remote CDP credentials.
+- Restrict remote CDP endpoints to private networking (loopback, VPN, or tailnet).
+
+## Per-service runbooks
+
+Use this checklist for each service run.
+
+### 1) Open app
 
 ```bash
 openclaw browser --browser-profile linear open "https://linear.app"
 ```
 
-### Navigate project or dashboard
+### 2) Navigate to project or context
 
 ```bash
 openclaw browser --browser-profile linear navigate "https://linear.app/openclaw/team/ENG"
 openclaw browser --browser-profile linear snapshot --interactive
 ```
 
-### Read key UI state
+### 3) Upload or download assets
 
-Use a snapshot first, then query visible state through stable refs.
+```bash
+openclaw browser --browser-profile linear upload ./artifacts/release-notes.pdf
+openclaw browser --browser-profile linear downloads --json
+```
+
+### 4) Verify completion
+
+Use UI plus network verification together.
 
 ```bash
 openclaw browser --browser-profile linear snapshot --interactive --json
-openclaw browser --browser-profile linear evaluate "() => document.title"
 openclaw browser --browser-profile linear requests --filter api --json
+openclaw browser --browser-profile linear screenshot --full-page
 ```
 
-Tips:
+Verification signals to capture:
 
-- Prefer snapshot refs over brittle CSS selectors.
-- Capture both UI and network signals when validating status changes.
+- UI confirmation text or status badge in snapshot output.
+- Expected API status codes or endpoint calls in `requests` output.
+- Final screenshot artifact for audit trails.
 
-### Upload and download artifacts
+## Comet compatibility checks and fallback
 
-```bash
-# Upload a file into the focused page input.
-openclaw browser --browser-profile linear upload ./artifacts/release-notes.pdf
+Some Comet deployments do not expose complete CDP discovery and websocket endpoints.
 
-# Trigger export/download from UI, then inspect browser downloads.
-openclaw browser --browser-profile linear downloads
-```
+### Compatibility check
 
-For scripted pipelines, use `--json` on `downloads` and parse file paths/statuses in your automation.
-
-## Comet compatibility
-
-Some hosted browser services or wrappers (including some Comet setups) may not expose full CDP endpoints.
-
-### Detect CDP support
-
-Check whether the endpoint responds to standard DevTools discovery routes:
+Run both endpoint checks before using a remote Comet profile:
 
 ```bash
 curl -fsS "http://127.0.0.1:9222/json/version"
 curl -fsS "http://127.0.0.1:9222/json/list"
 ```
 
-If either call fails, times out, or returns non-CDP output, treat attach as unsupported for this endpoint.
+Treat CDP attach as unavailable when:
 
-### Fallback when attach fails
+- Either command times out or fails.
+- Responses are not valid DevTools JSON payloads.
+- WebSocket connect repeatedly fails during OpenClaw profile startup.
 
-If remote attach fails for the Comet profile, switch that workflow to an OpenClaw-managed Chromium profile:
+### Fallback path: managed Chromium profile
+
+Switch the service to a local managed profile and continue automation:
 
 ```json5
 {
   browser: {
-    defaultProfile: "comet-managed",
     profiles: {
-      "comet-managed": { cdpPort: 18812, color: "#FF6A00" },
+      "comet-managed": { cdpPort: 18820, color: "#FF6A00" },
     },
   },
 }
 ```
 
-Then run automation with:
-
 ```bash
 openclaw browser --browser-profile comet-managed start
+openclaw browser --browser-profile comet-managed open "https://comet.example"
 ```
 
-This fallback keeps session persistence and deterministic automation even when external CDP attach is unavailable.
+This fallback preserves session persistence and avoids dependency on remote CDP attach.
+
+## Troubleshooting matrix
+
+| Failure                            | Likely cause                                              | Check                                                               | Fix                                                                        |
+| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Auth wall after restart            | Session cookie expired or profile mismatch                | Confirm correct `--browser-profile`; run `snapshot` on landing page | Re-login on the same profile, then retest persistence by restart           |
+| Selector drift or missing target   | UI changed and old selector/ref is stale                  | Run fresh `snapshot --interactive` and inspect refs                 | Replace brittle selector usage with current snapshot refs                  |
+| Upload blocked or no file attached | Hidden file input, permission prompt, or invalid path     | Verify path exists locally; inspect page errors and snapshot        | Use `upload` after focusing the right context, then confirm via UI/network |
+| CDP disconnect during run          | Remote endpoint unstable, idle timeout, or network policy | Check `/json/version`, `/json/list`, and retry profile start        | Reconnect; if repeated, move workflow to managed local profile             |
 
 ## See also
 
 - [Browser](/tools/browser)
-- [Browser login + X/Twitter posting](/tools/browser-login)
+- [Browser login + X or Twitter posting](/tools/browser-login)
 - [Browser troubleshooting](/tools/browser-linux-troubleshooting)
