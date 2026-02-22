@@ -58,6 +58,32 @@ See the [full reference](/gateway/configuration-reference) for every available f
   </Tab>
 </Tabs>
 
+## Reusable senior SWE prompt template
+
+Use the [Senior SWE policy prompt template](/assets/presets/senior-swe-policy-prompt) as a copy source.
+
+1. Copy the template text into one of these config targets:
+   - `agents.list[].systemPrompt` for a named profile such as `senior-swe`
+   - `agents.defaults.systemPrompt` for a global default policy
+2. Save `~/.openclaw/openclaw.json` and let the Gateway hot-reload.
+3. In runtime channels (for example Telegram), activate the profile with `/agent senior-swe`.
+
+```json5
+// ~/.openclaw/openclaw.json
+{
+  agents: {
+    list: [
+      {
+        id: "senior-swe",
+        systemPrompt: `PASTE_PROMPT_FROM_TEMPLATE`,
+      },
+    ],
+  },
+}
+```
+
+For a full autonomous setup walkthrough, see [Personal SWE agent preset](/automation/personal-swe-agent).
+
 ## Strict validation
 
 <Warning>
